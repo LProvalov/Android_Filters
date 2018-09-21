@@ -11,6 +11,8 @@ public class FilterActivity extends AppCompatActivity {
     public static String FILTER_TREE = "filter_tree";
 
     private FilterTree<FilterData> filterTree;
+    private ExpandableListView listView;
+    private int lastExpandedPosition = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -20,41 +22,51 @@ public class FilterActivity extends AppCompatActivity {
         Intent intent = getIntent();
         this.filterTree = (FilterTree<FilterData>) intent.getSerializableExtra(FILTER_TREE);
 
-        ExpandableListView listView = (ExpandableListView) findViewById(R.id.filter_listView);
+        listView = (ExpandableListView) findViewById(R.id.customer_filter_listView);
         listView.setAdapter(new FilterExpandableListViewAdapter(this, filterTree));
 
         listView.setOnChildClickListener(new ExpandableListView.OnChildClickListener() {
             @Override
             public boolean onChildClick(ExpandableListView parent, View v, int groupPosition, int childPosition, long id) {
-
-
-                switch(groupPosition) {
-                    case 0: { // Inspections
-                        filterTree.getTimeRoots().get(childPosition).getData().setChecked(!filterTree.getTimeRoots().get(childPosition).getData().isChecked());
-                    } break;
-                    case 1: { // Customers
-
-                    } break;
-                    case 2: { // Sites
-
-                    } break;
-                    case 3: { // Buildings
-
-                    } break;
-
-                }
+                ((FilterExpandableListViewAdapter) parent.getExpandableListAdapter()).onChildClick(groupPosition, childPosition);
+                ((FilterExpandableListViewAdapter) parent.getExpandableListAdapter()).notifyDataSetChanged();
                 return false;
             }
         });
 
-        listView.setOnGroupClickListener(new ExpandableListView.OnGroupClickListener() {
+        listView.setOnGroupExpandListener(new ExpandableListView.OnGroupExpandListener() {
             @Override
-            public boolean onGroupClick(ExpandableListView parent, View v, int groupPosition, long id) {
-                FilterExpandableListViewAdapter la = (FilterExpandableListViewAdapter) parent.getExpandableListAdapter();
-                la.notifyDataSetChanged();
-
-                return false;
+            public void onGroupExpand(int groupPosition) {
+                if (lastExpandedPosition != -1 && groupPosition != lastExpandedPosition) {
+                    listView.collapseGroup(lastExpandedPosition);
+                }
+                lastExpandedPosition = groupPosition;
             }
         });
+        listView.expandGroup(0);
+    }
+
+    public void onApplyButtonClick(View view) {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra(FILTER_TREE, this.filterTree);
+        setResult(RESULT_OK, intent);
+        finish();
+    }
+
+    public void onResetButtonClick(View view) {
+        for (FilterNode<FilterData> b : this.filterTree.getBuildings()) {
+            b.getData().setChecked(false);
+        }
+        for (FilterNode<FilterData> s : this.filterTree.getSites()) {
+            s.getData().setChecked(false);
+        }
+        for (FilterNode<FilterData> c : this.filterTree.getCustomers()) {
+            c.getData().setChecked(false);
+        }
+        for (FilterNode<FilterData> t : this.filterTree.getTimeRoots()) {
+            t.getData().setChecked(false);
+        }
+        listView.expandGroup(0);
+        ((FilterExpandableListViewAdapter) this.listView.getExpandableListAdapter()).notifyDataSetChanged();
     }
 }

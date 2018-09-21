@@ -1,12 +1,11 @@
 package com.example.levprovalov.firstapponmac;
 
 import android.content.Context;
-import android.database.DataSetObserver;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseExpandableListAdapter;
-import android.widget.ExpandableListAdapter;
+import android.widget.CheckBox;
 import android.widget.TextView;
 
 import java.util.ArrayList;
@@ -16,6 +15,7 @@ public class FilterExpandableListViewAdapter extends BaseExpandableListAdapter {
     private FilterTree<FilterData> filterTree;
     private Context mContext;
     private ArrayList<Integer> customerIndexes;
+    private final String[] GROUP_NAMES = {"Inspection", "Customers", "Sites", "Buildings"};
 
     public FilterExpandableListViewAdapter(Context mContext, FilterTree<FilterData> filterTree) {
         this.filterTree = filterTree;
@@ -25,37 +25,51 @@ public class FilterExpandableListViewAdapter extends BaseExpandableListAdapter {
 
     @Override
     public int getGroupCount() {
-        return 4;
+        return this.GROUP_NAMES.length;
     }
 
     @Override
     public int getChildrenCount(int groupPosition) {
+        int count = 0;
         switch (groupPosition) {
-            case 0: {
-                return 5;
-            }
-            case 1: {
-                int count = 0;
-                for(FilterNode<FilterData> t : filterTree.getTimeRoots()) {
+            case 0: // Inspection
+                count = filterTree.getTimeRoots().size();
+                break;
+            case 1: { // Customers
+                boolean atLeastOneRootSelected = false;
+                ArrayList<Integer> customerIndexes = new ArrayList<Integer>();
+                for (FilterNode<FilterData> t : filterTree.getTimeRoots()) {
                     if (t.getData().isChecked()) {
+                        atLeastOneRootSelected |= true;
                         for (int customerIndex : t.getChildren()) {
-                            if (!this.customerIndexes.contains(customerIndex))
+                            if (!customerIndexes.contains(customerIndex))
                             {
                                 count++;
+                                customerIndexes.add(customerIndex);
                             }
                         }
                     }
                 }
-                return count;
-            }
-            case 2: {
-
+                if (!atLeastOneRootSelected) {
+                    count = filterTree.getCustomers().size();
+                }
             } break;
-            case 3: {
-
+            case 2: { // Sites
+                for (FilterNode<FilterData> s : filterTree.getSites()) {
+                    if (filterTree.getCustomers().get(s.getParent()).getData().isChecked()) {
+                        count++;
+                    }
+                }
+            } break;
+            case 3: { // Buildings
+                for (FilterNode<FilterData> b : filterTree.getBuildings()) {
+                    if (filterTree.getSites().get(b.getParent()).getData().isChecked()) {
+                        count++;
+                    }
+                }
             } break;
         }
-        return 0;
+        return count;
     }
 
     @Override
@@ -83,26 +97,41 @@ public class FilterExpandableListViewAdapter extends BaseExpandableListAdapter {
         return false;
     }
 
+    private int countOfCheckedItems(ArrayList<FilterNode<FilterData>> nodes) {
+        int count = 0;
+        for(FilterNode<FilterData> node : nodes) {
+            if (node.getData().isChecked()) count++;
+        }
+        return count;
+    }
+
     @Override
     public View getGroupView(int groupPosition, boolean isExpanded, View convertView, ViewGroup parent) {
         if (convertView == null) {
             LayoutInflater inflater = (LayoutInflater) mContext.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             convertView = inflater.inflate(R.layout.filter_group_item, null);
         }
-        TextView textView = (TextView) convertView.findViewById(R.id.group_textview);
+        ((TextView) convertView.findViewById(R.id.customer_filter_group)).setText(GROUP_NAMES[groupPosition]);
+        TextView counterTextView = (TextView) convertView.findViewById(R.id.customer_filter_group_counter);
+        int count = 0;
         switch (groupPosition) {
-            case 0: {
-                textView.setText("Inspections");
+            case 0: { // Inspection
+                count = countOfCheckedItems(filterTree.getTimeRoots());
             } break;
-            case 1: {
-                textView.setText("Customers");
+            case 1: { // Customers
+                count = countOfCheckedItems(filterTree.getCustomers());
             } break;
-            case 2: {
-                textView.setText("Sites");
+            case 2: { // Sites
+                count = countOfCheckedItems(filterTree.getSites());
             } break;
-            case 3: {
-                textView.setText("Buildings");
+            case 3: { // Buildings
+                count = countOfCheckedItems(filterTree.getBuildings());
             } break;
+        }
+        if (0 == count) counterTextView.setVisibility(View.INVISIBLE);
+        else {
+            counterTextView.setVisibility(View.VISIBLE);
+            counterTextView.setText(Integer.toString(count));
         }
         return convertView;
     }
@@ -115,45 +144,57 @@ public class FilterExpandableListViewAdapter extends BaseExpandableListAdapter {
         }
 
         switch(groupPosition) {
-            case 0: { // inspections
-                TextView tv = (TextView) convertView.findViewById(R.id.filter_child_item_text);
-                switch(childPosition) {
-                    case 0: {
-                        tv.setText("Overdue");
-                    } break;
-                    case 1: {
-                        tv.setText("Today");
-                    } break;
-                    case 2: {
-                        tv.setText("Next 7 days");
-                    } break;
-                    case 3: {
-                        tv.setText("Next 15 days");
-                    } break;
-                    case 4: {
-                        tv.setText("Next month");
-                    } break;
-                }
+            case 0: { // Inspection
+                ((TextView)convertView.findViewById(R.id.customer_filter_text)).setText(filterTree.getTimeRoots().get(childPosition).getData().getName());
+                ((CheckBox)convertView.findViewById(R.id.customer_filter_checkbox)).setChecked(filterTree.getTimeRoots().get(childPosition).getData().isChecked());
             } break;
-            case 1: { // customers
-                TextView tv = (TextView) convertView.findViewById(R.id.filter_child_item_text);
-                for(FilterNode<FilterData> t : filterTree.getTimeRoots()) {
+
+            case 1: { // Customers
+                ArrayList<Integer> customerIndexes = new ArrayList<>();
+                boolean atLeastOneRootSelected = false;
+                for (FilterNode<FilterData> t : filterTree.getTimeRoots()) {
                     if (t.getData().isChecked()) {
-                        for (int customerIndex : t.getChildren()) {
-                            if (!this.customerIndexes.contains(customerIndex))
-                            {
-                                this.customerIndexes.add(customerIndex);
-                                tv.setText(filterTree.getCustomers().get(customerIndex).getData().getName());
+                        atLeastOneRootSelected |= true;
+                        for (int cIndex : t.getChildren()) {
+                            if (!customerIndexes.contains(cIndex)) {
+                                customerIndexes.add(cIndex);
                             }
                         }
                     }
                 }
+                if (atLeastOneRootSelected) {
+                    ((TextView) convertView.findViewById(R.id.customer_filter_text)).setText(filterTree.getCustomers().get(customerIndexes.get(childPosition)).getData().getName());
+                    ((CheckBox) convertView.findViewById(R.id.customer_filter_checkbox)).setChecked(filterTree.getCustomers().get(customerIndexes.get(childPosition)).getData().isChecked());
+                } else {
+                    ((TextView) convertView.findViewById(R.id.customer_filter_text)).setText(filterTree.getCustomers().get(childPosition).getData().getName());
+                    ((CheckBox) convertView.findViewById(R.id.customer_filter_checkbox)).setChecked(filterTree.getCustomers().get(childPosition).getData().isChecked());
+                }
             } break;
-            case 2: { // sites
 
+            case 2: { // Sites
+                int siteIndex = 0;
+                for (FilterNode<FilterData> s : filterTree.getSites()) {
+                    if (filterTree.getCustomers().get(s.getParent()).getData().isChecked()) {
+                        if (siteIndex == childPosition) {
+                            ((TextView) convertView.findViewById(R.id.customer_filter_text)).setText(s.getData().getName());
+                            ((CheckBox) convertView.findViewById(R.id.customer_filter_checkbox)).setChecked(s.getData().isChecked());
+                            break;
+                        } else siteIndex++;
+                    }
+                }
             } break;
-            case 3: { // buildings
 
+            case 3: { // Buildings
+                int buildingIndex = 0;
+                for (FilterNode<FilterData> b : filterTree.getBuildings()) {
+                    if (filterTree.getSites().get(b.getParent()).getData().isChecked()) {
+                        if (buildingIndex == childPosition) {
+                            ((TextView) convertView.findViewById(R.id.customer_filter_text)).setText(b.getData().getName());
+                            ((CheckBox) convertView.findViewById(R.id.customer_filter_checkbox)).setChecked(b.getData().isChecked());
+                            break;
+                        } else buildingIndex++;
+                    }
+                }
             } break;
         }
 
@@ -185,4 +226,67 @@ public class FilterExpandableListViewAdapter extends BaseExpandableListAdapter {
 
     }
 
+    public void onChildClick(int groupPosition, int childPosition) {
+        switch (groupPosition) {
+            case 0: { // Inspections
+                boolean atLeastOneRootSelected = false;
+                for (FilterNode<FilterData> r : filterTree.getTimeRoots()) {
+                    if (r.getData().isChecked()) {
+                        atLeastOneRootSelected = true;
+                        break;
+                    }
+                }
+                if (!atLeastOneRootSelected) {
+                    for (FilterNode<FilterData> c : filterTree.getCustomers()) c.getData().setChecked(false);
+                    for (FilterNode<FilterData> s : filterTree.getSites()) s.getData().setChecked(false);
+                    for (FilterNode<FilterData> b : filterTree.getBuildings()) b.getData().setChecked(false);
+                }
+                FilterNode<FilterData> t = filterTree.getTimeRoots().get(childPosition);
+                t.getData().setChecked(!t.getData().isChecked());
+            } break;
+            case 1: { // Customers
+                boolean atLeastOneRootSelected = false;
+                ArrayList<Integer> customerIndexes = new ArrayList<>();
+                for (FilterNode<FilterData> t : filterTree.getTimeRoots()) {
+                    if (t.getData().isChecked()) {
+                        atLeastOneRootSelected |= true;
+                        for (int  cIndex : t.getChildren()) {
+                            if (!customerIndexes.contains(cIndex)) {
+                                customerIndexes.add(cIndex);
+                            }
+                        }
+                    }
+                }
+                FilterNode<FilterData> c;
+                if (atLeastOneRootSelected) {
+                    c = filterTree.getCustomers().get(customerIndexes.get(childPosition));
+                } else {
+                    c = filterTree.getCustomers().get(childPosition);
+                }
+                c.getData().setChecked(!c.getData().isChecked());
+            } break;
+            case 2: { // Sites
+                int siteIndex = 0;
+                for (FilterNode<FilterData> s : filterTree.getSites()) {
+                    if (filterTree.getCustomers().get(s.getParent()).getData().isChecked()) {
+                        if (siteIndex == childPosition) {
+                            s.getData().setChecked(!s.getData().isChecked());
+                            return;
+                        } else siteIndex++;
+                    }
+                }
+            } break;
+            case 3: { // Buildings
+                int buildingIndex = 0;
+                for (FilterNode<FilterData> b : filterTree.getBuildings()) {
+                    if (filterTree.getSites().get(b.getParent()).getData().isChecked()) {
+                        if (buildingIndex == childPosition) {
+                            b.getData().setChecked(!b.getData().isChecked());
+                            return;
+                        } else buildingIndex++;
+                    }
+                }
+            } break;
+        }
+    }
 }
